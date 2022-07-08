@@ -1,0 +1,96 @@
+* Instructions
+https://hub.docker.com/r/overv/openstreetmap-tile-server/
+
+* Get Open Streetmap data for Colorado and larger US West
+#+begin_src shell
+    curl -O http://download.geofabrik.de/north-america/us/colorado-latest.osm.pbf
+    curl -O https://download.geofabrik.de/north-america/us-west-latest.osm.pbf
+#+end_src
+
+* Docker Volume and Image Setup
+#+begin_src shell
+  docker volume create osm-data
+  docker volume create osm-tiles
+  docker pull overv/openstreetmap-tile-server
+#+end_src
+
+* Clone The Cyclosm Stylesheet
+** TODO Figure out how to use this
+#+begin_src shell
+  cd ~/src/
+  git clone https://github.com/cyclosm/cyclosm-cartocss-style/
+#+end_src
+
+* Reset Containers
+#+begin_src shell
+  docker container kill us-west-tile-container colorado-tile-container
+  docker container rm us-west-tile-container colorado-tile-container
+  docker container prune
+  docker volume rm osm-data osm-tiles
+#+end_src
+
+* Import The Colorado Data
+#+begin_src shell
+  time docker run \
+       --name colorado-tile-container \
+       -v /home/jeremiah/src/openstreetmap-tile-server/colorado-latest.osm.pbf:/data/region.osm.pbf \
+       -v osm-data:/data/database \
+       -v osm-tiles:/data/tiles \
+       -e THREADS=48 \
+       -e NAME_MML=project.mml \
+       -e NAME_SQL=views.sql \
+       -v /home/jeremiah/src/cycloosm-cartocss-style:/data/style/ \
+       overv/openstreetmap-tile-server \
+       import
+#+end_src
+
+* Or Import The US-West Data
+#+begin_src shell
+  time docker run \
+       --name us-west-tile-container \
+       -v /home/jeremiah/src/openstreetmap-tile-server/us-west-latest.osm.pbf:/data/region.osm.pbf \
+       -v osm-data:/data/database \
+       -v osm-tiles:/data/tiles \
+       -e THREADS=48 \
+       -e NAME_MML=project.mml \
+       -e NAME_SQL=views.sql \
+       -v /home/jeremiah/src/cycloosm-cartocss-style:/data/style/ \
+       overv/openstreetmap-tile-server \
+       import
+#+end_src
+
+* Run The Server
+#+begin_src shell
+  docker run \
+    -p 8080:80 \
+    -v osm-data:/data/database \
+    -v osm-tiles:/data/tiles \
+    -e THREADS=20 \
+    -e "OSM2PGSQL_EXTRA_ARGS=-C 4096" \
+    -e NAME_MML=project.mml \
+    -e NAME_SQL=views.sql \
+    -v /home/jeremiah/src/cycloosm-cartocss-style:/data/style/ \
+    -d overv/openstreetmap-tile-server \
+    --name us-west-container \
+    run
+#+end_src
+
+* Lisp code to read the tiles
+#+begin_src lisp
+  (ql:quickload '(:dexador :png :flexi-streams :global-map-tiles))
+  (defun fetch-tile-xyz (x y z)
+    (png:decode (flexi-streams:make-in-memory-input-stream
+                 (dex:get (format nil "http://localhost:8088/tile/~a/~a/~a.png" z x y)))
+                :preserve-alpha t))
+  (defun fetch-tile-lat-lon (zoom lat lon)
+    (let ((tgmt (make-instance 'gmt:global-mercator)))
+      (multiple-value-call
+          #'fetch-tile
+        zoom
+        (multiple-value-call
+            #'gmt:meters-to-tile
+          tgmt
+          (gmt:lat-lon-to-meters tgmt lat lon)
+          zoom))))
+x
+#+end_src
