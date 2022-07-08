@@ -62,6 +62,7 @@ https://hub.docker.com/r/overv/openstreetmap-tile-server/
 * Run The Server
 #+begin_src shell
   docker run \
+    --name us-west-container \
     -p 8080:80 \
     -v osm-data:/data/database \
     -v osm-tiles:/data/tiles \
@@ -71,7 +72,6 @@ https://hub.docker.com/r/overv/openstreetmap-tile-server/
     -e NAME_SQL=views.sql \
     -v /home/jeremiah/src/cycloosm-cartocss-style:/data/style/ \
     -d overv/openstreetmap-tile-server \
-    --name us-west-container \
     run
 #+end_src
 
@@ -92,5 +92,5 @@ https://hub.docker.com/r/overv/openstreetmap-tile-server/
           tgmt
           (gmt:lat-lon-to-meters tgmt lat lon)
           zoom))))
-x
+
 #+end_src
