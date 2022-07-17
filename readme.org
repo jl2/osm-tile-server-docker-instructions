@@ -36,6 +36,7 @@ https://hub.docker.com/r/overv/openstreetmap-tile-server/
        -v /home/jeremiah/src/openstreetmap-tile-server/colorado-latest.osm.pbf:/data/region.osm.pbf \
        -v osm-data:/data/database \
        -v osm-tiles:/data/tiles \
+       -e "OSM2PGSQL_EXTRA_ARGS=-C 8192" \
        -e THREADS=48 \
        -e NAME_MML=project.mml \
        -e NAME_SQL=views.sql \
@@ -62,12 +63,13 @@ https://hub.docker.com/r/overv/openstreetmap-tile-server/
 * Run The Server
 #+begin_src shell
   docker run \
-    --name us-west-container \
+    --name colorado-container \
     -p 8080:80 \
+    -p 54321:5432 \
     -v osm-data:/data/database \
     -v osm-tiles:/data/tiles \
-    -e THREADS=20 \
-    -e "OSM2PGSQL_EXTRA_ARGS=-C 4096" \
+    -e THREADS=48 \
+    -e "OSM2PGSQL_EXTRA_ARGS=-C 8192" \
     -e NAME_MML=project.mml \
     -e NAME_SQL=views.sql \
     -v /home/jeremiah/src/cycloosm-cartocss-style:/data/style/ \
@@ -75,22 +77,19 @@ https://hub.docker.com/r/overv/openstreetmap-tile-server/
     run
 #+end_src
 
-* Lisp code to read the tiles
+* Lisp code to play with the tiles and PostGIS backend
 #+begin_src lisp
-  (ql:quickload '(:dexador :png :flexi-streams :global-map-tiles))
-  (defun fetch-tile-xyz (x y z)
-    (png:decode (flexi-streams:make-in-memory-input-stream
-                 (dex:get (format nil "http://localhost:8088/tile/~a/~a/~a.png" z x y)))
-                :preserve-alpha t))
-  (defun fetch-tile-lat-lon (zoom lat lon)
-    (let ((tgmt (make-instance 'gmt:global-mercator)))
-      (multiple-value-call
-          #'fetch-tile
-        zoom
-        (multiple-value-call
-            #'gmt:meters-to-tile
-          tgmt
-          (gmt:lat-lon-to-meters tgmt lat lon)
-          zoom))))
+  (ql:quickload :osm-tiles)
+#+end_src
+
+See [[https://github.com/jl2/osm-tiles/][osm-tiles]] package for more details.
+
+* Examining PostGIS Data
+OpenStreetMap Wiki has documentation for tags and other DB entries.
+https://wiki.openstreetmap.org/wiki/Key:cycleway
+#+begin_src lisp
+  (show-tables "public")
+  (describe-table "planet_osm_roads")
+  (sq "select name, tags from planet_osm_roads where name is not null and tags->'cycleway' is not null and tags->'maxspeed' like '%30 mph%' limit 10")
 
 #+end_src
